@@ -22,22 +22,25 @@
         .selected {
             background-color: yellow;
         }
-        /* Player 1 pieces - Red color */
-        /* Player 1 pieces - Red color */
         .P1, .H1a, .H2a {
             color: red;
             font-weight: bold;
         }
-
-/* Player 2 pieces - Blue color */
-.P2, .H1b, .H2b {
-    color: blue;
-    font-weight: bold;
-}
-
-/* Style for empty cells */
-.empty {
-    color: gray;
+        .P2, .H1b, .H2b {
+            color: blue;
+            font-weight: bold;
+        }
+        .empty {
+            color: gray;
+        }
+        .valid-move {
+            background-color: lightgreen;
+        }
+        #move-history {
+            margin-top: 20px;
+        }
+        #restart-button {
+    display: none; /* Initially hidden */
 }
 
     </style>
@@ -47,63 +50,98 @@
     <h2 id="turn-indicator">Player 1's Turn (Red)</h2>
 
     <div id="board"></div>
+    <button id="restart-button" style="display:none;">Restart Game</button>
+    
+    <div id="move-history">
+        <h3>Move History</h3>
+        <ul id="history-list"></ul>
+    </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
     <script>
-        const socket = io('http://172.16.18.95:5000');
-        const boardElement = document.getElementById('board');
+const socket = io('http://172.16.18.95:5000');
+const boardElement = document.getElementById('board');
+const restartButton = document.getElementById('restart-button');
+const moveHistoryElement = document.getElementById('move-history'); // Add a reference to move history element
 
-        let selectedCell = null;
-        let gameState = null;
+let selectedCell = null;
+let gameState = null;
+let moveHistory = []; // Array to store move history
 
-        function renderBoard(board) {
-            boardElement.innerHTML = '';
-            for (let i = 0; i < 5; i++) {
-                for (let j = 0; j < 5; j++) {
-                    const cell = document.createElement('div');
-                    cell.className = 'cell';
-                    cell.innerText = board[i][j];
-                    if (board[i][j] !== '') {
-                        cell.classList.add(board[i][j]); // Add class based on piece type
-                    } else {
-                        cell.classList.add('empty'); // Style for empty cells
-                    }
-                    cell.onclick = () => selectCell(i, j);
-                    boardElement.appendChild(cell);
-                }
-            }
-        }
-
-        function selectCell(row, col) {
-            if (selectedCell) {
-                // Make a move if a cell is already selected
-                makeMove(selectedCell.row, selectedCell.col, row, col);
-                selectedCell = null;
+function renderBoard(board) {
+    boardElement.innerHTML = '';
+    for (let i = 0; i < 5; i++) {
+        for (let j = 0; j < 5; j++) {
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            cell.innerText = board[i][j];
+            if (board[i][j] !== '') {
+                cell.classList.add(board[i][j]); // Add class based on piece type
             } else {
-                // Select the piece to move
-                selectedCell = { row, col };
-                highlightCell(row, col);
+                cell.classList.add('empty'); // Style for empty cells
             }
+            cell.onclick = () => selectCell(i, j);
+            boardElement.appendChild(cell);
         }
+    }
+}
 
-        function highlightCell(row, col) {
-            // Clear previous selection
-            const cells = document.querySelectorAll('.cell');
-            cells.forEach(cell => cell.classList.remove('selected'));
-
-            // Highlight the selected cell
-            const index = row * 5 + col;
-            cells[index].classList.add('selected');
+function selectCell(row, col) {
+    if (selectedCell) {
+        makeMove(selectedCell.row, selectedCell.col, row, col);
+        selectedCell = null;
+        clearHighlights(); // Clear highlights after the move
+    } else {
+        selectedCell = { row, col };
+        highlightCell(row, col);
+        const piece = gameState.board[row][col];
+        if (piece) {
+            const validMoves = getValidMoves(piece, row, col);
+            highlightValidMoves(validMoves); // Highlight valid moves
         }
+    }
+}
 
-        function makeMove(startRow, startCol, endRow, endCol) {
-            socket.emit('move', {
-                player: gameState.turn, // Use the current player's turn from gameState
-                start: [startRow, startCol],
-                end: [endRow, endCol]
-            });
-        }
-        function updateTurnIndicator(turn) {
+function highlightValidMoves(validMoves) {
+    validMoves.forEach(move => {
+        const index = move[0] * 5 + move[1];
+        const cells = document.querySelectorAll('.cell');
+        cells[index].classList.add('valid-move'); // Add a class for highlighting
+    });
+}
+
+function clearHighlights() {
+    const cells = document.querySelectorAll('.cell');
+    cells.forEach(cell => cell.classList.remove('selected', 'valid-move'));
+}
+
+function highlightCell(row, col) {
+    const cells = document.querySelectorAll('.cell');
+    cells.forEach(cell => cell.classList.remove('selected'));
+
+    const index = row * 5 + col;
+    cells[index].classList.add('selected');
+}
+function makeMove(startRow, startCol, endRow, endCol) {
+    // Validate the move on the client-side
+    if (isValidMove(startRow, startCol, endRow, endCol)) {
+        // Send the move to the server
+        socket.emit('move', {
+            player: gameState.turn,
+            start: [startRow, startCol],
+            end: [endRow, endCol]
+        });
+    }
+}
+
+
+function isValidMove(startRow, startCol, endRow, endCol) {
+    const piece = gameState.board[startRow][startCol];
+    const validMoves = getValidMoves(piece, startRow, startCol);
+    return validMoves.some(move => move[0] === endRow && move[1] === endCol);
+}
+
+function updateTurnIndicator(turn) {
     const turnIndicator = document.getElementById('turn-indicator');
     if (turn === 'player1') {
         turnIndicator.innerText = "Player 1's Turn (Red)";
@@ -112,33 +150,95 @@
     }
 }
 
+function setupRestartButton() {
+    restartButton.onclick = () => {
+        socket.emit('reset_game'); // Emit a reset event to the server
+        moveHistory = []; // Clear the move history for the new game
+        displayMoveHistory(); // Update the display
+    };
+}
+
+function getValidMoves(piece, row, col) {
+    const validMoves = [];
+    if (piece.startsWith('P')) {
+        addMove(validMoves, row + 1, col); // Down
+        addMove(validMoves, row - 1, col); // Up
+        addMove(validMoves, row, col + 1); // Right
+        addMove(validMoves, row, col - 1); // Left
+        addMove(validMoves, row + 1, col + 1); // Down-Right
+        addMove(validMoves, row - 1, col - 1); // Up-Left
+        addMove(validMoves, row + 1, col - 1); // Down-Left
+        addMove(validMoves, row - 1, col + 1); // Up-Right
+
+    } else if (piece.startsWith('H1')) {
+        addMove(validMoves, row + 2, col); // Down
+        addMove(validMoves, row - 2, col); // Up
+        addMove(validMoves, row, col + 2); // Right
+        addMove(validMoves, row, col - 2); // Left
+    } else if (piece.startsWith('H2')) {
+        addMove(validMoves, row + 2, col + 2); // Down-Right
+        addMove(validMoves, row - 2, col - 2); // Up-Left
+        addMove(validMoves, row + 2, col - 2); // Down-Left
+        addMove(validMoves, row - 2, col + 2); // Up-Right
+    }
+    return validMoves;
+}
+
+function addMove(moves, row, col) {
+    if (row >= 0 && row < 5 && col >= 0 && col < 5) {
+        moves.push([row, col]);
+    }
+}
+
+function displayMoveHistory() {
+    moveHistoryElement.innerHTML = ''; // Clear current history
+    moveHistory.forEach((move, index) => {
+        const moveElement = document.createElement('div');
+        moveElement.innerText = `Move ${index + 1}: ${move.start} -> ${move.end}`;
+        moveHistoryElement.appendChild(moveElement);
+    });
+}
+
 socket.on('game_state', (newGameState) => {
-    gameState = newGameState; // Update the gameState with the latest data from the server
+    gameState = newGameState;
     renderBoard(gameState.board);
-    updateTurnIndicator(gameState.turn); // Update the turn indicator
+    updateTurnIndicator(gameState.turn);
+    restartButton.style.display = 'none'; // Hide restart button initially
 });
 
-        socket.on('game_state', (newGameState) => {
-            gameState = newGameState; // Update the gameState with the latest data from the server
-            renderBoard(gameState.board);
-            updateTurnIndicator(gameState.turn); // Update the turn indicator
-        });
+socket.on('game_over', (data) => {
+    alert(data.winner + ' has won the game!');
+    restartButton.style.display = 'block'; // Show the restart button
+});
 
-        socket.on('game_over', (data) => {
-            alert(data.winner + ' has won the game!');
-        });
-        
-        socket.on('connect', () => {
-            console.log('Connected to server');
-        });
+socket.on('connect', () => {
+    console.log('Connected to server');
+    setupRestartButton(); // Initialize restart button event handler
+});
 
-        socket.on('disconnect', () => {
-            console.log('Disconnected from server');
-        });
+socket.on('disconnect', () => {
+    console.log('Disconnected from server');
+});
 
-        socket.on('error', (error) => {
-            console.error('Socket.IO error:', error);
-        });
+socket.on('error', (error) => {
+    console.error('Socket.IO error:', error);
+});
+socket.on('move_made', (data) => {
+    // Add valid move to history
+    moveHistory.push({
+        player: data.player,
+        piece: data.piece,
+        start: data.start,
+        end: data.end
+    });
+    displayMoveHistory(); // Update the move history display
+});
+
+socket.on('invalid_move', (data) => {
+    alert(data.message); // Notify the user of the invalid move
+});
+
+
     </script>
 </body>
 </html>

@@ -39,6 +39,10 @@
 .empty {
     color: gray;
 }
+.valid-move {
+    background-color: lightgreen; /* Highlight color for valid moves */
+}
+
 
     </style>
 </head>
@@ -78,16 +82,36 @@
         }
 
         function selectCell(row, col) {
-            if (selectedCell) {
-                // Make a move if a cell is already selected
-                makeMove(selectedCell.row, selectedCell.col, row, col);
-                selectedCell = null;
-            } else {
-                // Select the piece to move
-                selectedCell = { row, col };
-                highlightCell(row, col);
-            }
+    if (selectedCell) {
+        // Make a move if a cell is already selected
+        makeMove(selectedCell.row, selectedCell.col, row, col);
+        selectedCell = null;
+        clearHighlights(); // Clear highlights after the move
+    } else {
+        // Select the piece to move
+        selectedCell = { row, col };
+        highlightCell(row, col);
+        const piece = gameState.board[row][col];
+        if (piece) {
+            const validMoves = getValidMoves(piece, row, col);
+            highlightValidMoves(validMoves); // Highlight valid moves
         }
+    }
+}
+
+function highlightValidMoves(validMoves) {
+    validMoves.forEach(move => {
+        const index = move[0] * 5 + move[1];
+        const cells = document.querySelectorAll('.cell');
+        cells[index].classList.add('valid-move'); // Add a class for highlighting
+    });
+}
+
+function clearHighlights() {
+    const cells = document.querySelectorAll('.cell');
+    cells.forEach(cell => cell.classList.remove('selected', 'valid-move'));
+}
+
 
         function highlightCell(row, col) {
             // Clear previous selection
@@ -120,6 +144,41 @@ function setupRestartButton() {
     restartButton.onclick = () => {
         socket.emit('reset_game'); // Emit a reset event to the server
     };
+}
+function getValidMoves(piece, row, col) {
+    const validMoves = [];
+    if (piece.startsWith('P')) {
+        // Pawn movement: one block in any direction
+        addMove(validMoves, row + 1, col); // Down
+        addMove(validMoves, row - 1, col); // Up
+        addMove(validMoves, row, col + 1); // Right
+        addMove(validMoves, row, col - 1); // Left
+        addMove(validMoves, row + 1, col + 1); // Down-Right
+        addMove(validMoves, row - 1, col - 1); // Up-Left
+        addMove(validMoves, row + 1, col - 1); // Down-Left
+        addMove(validMoves, row - 1, col + 1); // Up-Right
+
+    } else if (piece.startsWith('H1')) {
+        // Hero1 movement: 2 blocks in any direction except diagonally
+        addMove(validMoves, row + 2, col); // Down
+        addMove(validMoves, row - 2, col); // Up
+        addMove(validMoves, row, col + 2); // Right
+        addMove(validMoves, row, col - 2); // Left
+    } else if (piece.startsWith('H2')) {
+        // Hero2 movement: 2 blocks diagonally
+        addMove(validMoves, row + 2, col + 2); // Down-Right
+        addMove(validMoves, row - 2, col - 2); // Up-Left
+        addMove(validMoves, row + 2, col - 2); // Down-Left
+        addMove(validMoves, row - 2, col + 2); // Up-Right
+    }
+    return validMoves;
+}
+
+function addMove(moves, row, col) {
+    // Ensure the move is within bounds
+    if (row >= 0 && row < 5 && col >= 0 && col < 5) {
+        moves.push([row, col]);
+    }
 }
 
 socket.on('game_state', (newGameState) => {

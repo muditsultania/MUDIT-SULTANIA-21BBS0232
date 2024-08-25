@@ -1,4 +1,4 @@
-#Welcome to the Ultimate Chess-Like Game!
+##Welcome to the Ultimate Chess-Like Game!
 Hey there!
 
 You’ve found the coolest chess-like game I put together during exam season. Between cramming and coding, I managed to create something pretty fun. Here’s the lowdown on how it came together and how to use it.

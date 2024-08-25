@@ -141,39 +141,30 @@ def handle_move(data):
     end = data['end']
     player = data['player']
 
-    print(f"Received move from {player}: {start} -> {end}")
-    print(f"Current turn: {game_state['turn']}")
-
-    # Check if the move is valid
     if player == game_state['turn'] and is_valid_move(player, start, end):
-        print(f"Move is valid. Moving piece from {start} to {end}")
-
         piece = game_state['board'][start[0]][start[1]]
-        
-        # Check if there's an opponent piece in the path that should be killed
         piece_in_path = is_path_clear(player, start, end)
         if piece_in_path:
-            print(f"Killing opponent piece at {piece_in_path}")
-            game_state['board'][piece_in_path[0]][piece_in_path[1]] = ''  # Remove the opponent piece in the path
-
-        # Move the piece on the board
+            game_state['board'][piece_in_path[0]][piece_in_path[1]] = ''
+        
         game_state['board'][start[0]][start[1]] = ''
         game_state['board'][end[0]][end[1]] = piece
 
-        # Check if the game is over
         winner = check_game_over()
         if winner:
             emit('game_over', {'winner': winner, 'message': f'{winner} wins! Do you want to start a new game?'}, broadcast=True)
             return
 
-        # Switch turn
         game_state['turn'] = 'player2' if player == 'player1' else 'player1'
         emit('game_state', game_state, broadcast=True)
+        emit('move_made', {
+            'player': player,
+            'piece': piece,
+            'start': start,
+            'end': end
+        }, broadcast=True)
     else:
-        print("Invalid move attempted")
-        emit('invalid_move', {'message': 'Invalid move, please try again'}, broadcast=False)
-        emit('game_state', game_state, broadcast=True)  # Refresh the board after an invalid move
-
+        emit('invalid_move', {'message': 'Invalid move, please try again'}, broadcast=True)
 @socketio.on('reset_game')
 def handle_reset_game():
     global game_state
@@ -189,6 +180,8 @@ def handle_reset_game():
         'turn': 'player1'
     }
     emit('game_state', game_state, broadcast=True)
+    # Clear move history on reset (if needed on server-side)
+
 
 
 

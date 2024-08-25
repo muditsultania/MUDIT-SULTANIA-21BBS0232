@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Game</title>
+    <style>
+        #board {
+            display: grid;
+            grid-template-columns: repeat(5, 50px);
+            grid-template-rows: repeat(5, 50px);
+            gap: 5px;
+        }
+        .cell {
+            width: 50px;
+            height: 50px;
+            background-color: lightgray;
+            text-align: center;
+            line-height: 50px;
+            cursor: pointer;
+        }
+        .selected {
+            background-color: yellow;
+        }
+        /* Player 1 pieces - Red color */
+        /* Player 1 pieces - Red color */
+        .P1, .H1a, .H2a {
+            color: red;
+            font-weight: bold;
+        }
+
+/* Player 2 pieces - Blue color */
+.P2, .H1b, .H2b {
+    color: blue;
+    font-weight: bold;
+}
+
+/* Style for empty cells */
+.empty {
+    color: gray;
+}
+
+    </style>
+</head>
+<body>
+    <h1>Chess Game</h1>
+    <h2 id="turn-indicator">Player 1's Turn (Red)</h2>
+
+    <div id="board"></div>
+    <!-- Add this HTML somewhere in your body, below the game board -->
+<button id="restart-button" style="display:none;">Restart Game</button>
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
+    <script>
+        const socket = io('http://172.16.18.95:5000');
+        const boardElement = document.getElementById('board');
+
+        let selectedCell = null;
+        let gameState = null;
+
+        function renderBoard(board) {
+            boardElement.innerHTML = '';
+            for (let i = 0; i < 5; i++) {
+                for (let j = 0; j < 5; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.innerText = board[i][j];
+                    if (board[i][j] !== '') {
+                        cell.classList.add(board[i][j]); // Add class based on piece type
+                    } else {
+                        cell.classList.add('empty'); // Style for empty cells
+                    }
+                    cell.onclick = () => selectCell(i, j);
+                    boardElement.appendChild(cell);
+                }
+            }
+        }
+
+        function selectCell(row, col) {
+            if (selectedCell) {
+                // Make a move if a cell is already selected
+                makeMove(selectedCell.row, selectedCell.col, row, col);
+                selectedCell = null;
+            } else {
+                // Select the piece to move
+                selectedCell = { row, col };
+                highlightCell(row, col);
+            }
+        }
+
+        function highlightCell(row, col) {
+            // Clear previous selection
+            const cells = document.querySelectorAll('.cell');
+            cells.forEach(cell => cell.classList.remove('selected'));
+
+            // Highlight the selected cell
+            const index = row * 5 + col;
+            cells[index].classList.add('selected');
+        }
+
+        function makeMove(startRow, startCol, endRow, endCol) {
+            socket.emit('move', {
+                player: gameState.turn, // Use the current player's turn from gameState
+                start: [startRow, startCol],
+                end: [endRow, endCol]
+            });
+        }
+        function updateTurnIndicator(turn) {
+    const turnIndicator = document.getElementById('turn-indicator');
+    if (turn === 'player1') {
+        turnIndicator.innerText = "Player 1's Turn (Red)";
+    } else {
+        turnIndicator.innerText = "Player 2's Turn (Blue)";
+    }
+}
+const restartButton = document.getElementById('restart-button');
+
+function setupRestartButton() {
+    restartButton.onclick = () => {
+        socket.emit('reset_game'); // Emit a reset event to the server
+    };
+}
+
+socket.on('game_state', (newGameState) => {
+    gameState = newGameState; // Update the gameState with the latest data from the server
+    renderBoard(gameState.board);
+    updateTurnIndicator(gameState.turn); // Update the turn indicator
+    restartButton.style.display = 'none'; // Hide restart button if game is not over
+});
+
+socket.on('game_over', (data) => {
+    alert(data.winner + ' has won the game!');
+    restartButton.style.display = 'block'; // Show the restart button
+});
+
+socket.on('connect', () => {
+    console.log('Connected to server');
+    setupRestartButton(); // Initialize restart button event handler
+});
+
+socket.on('disconnect', () => {
+    console.log('Disconnected from server');
+});
+
+socket.on('error', (error) => {
+    console.error('Socket.IO error:', error);
+});
+
+    </script>
+</body>
+</html>
